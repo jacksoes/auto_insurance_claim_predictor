@@ -1,12 +1,47 @@
 
+import { useEffect, useState } from "react";
 import "./App.css";
 
+// Local Flask API for development.
+// Later, replace this with your deployed AWS Lambda Function URL.
+const API_URL = "http://localhost:5000/api/claims/summary";
+
 const kpis = [
-  { label: "Total Claims", icon: "#", color: "blue" },
-  { label: "Total Claim Amount", icon: "$", color: "purple" },
-  { label: "Average Claim Amount", icon: "↗", color: "teal" },
-  { label: "Male Count", icon: "♂", color: "orange" },
-  { label: "Female Count", icon: "♀", color: "pink" },
+  {
+    label: "Total Claims",
+    key: "total_claims",
+    icon: "#",
+    color: "blue",
+    format: "number",
+  },
+  {
+    label: "Total Claim Amount",
+    key: "total_claim_amount",
+    icon: "$",
+    color: "purple",
+    format: "currency",
+  },
+  {
+    label: "Average Claim Amount",
+    key: "average_claim_amount",
+    icon: "↗",
+    color: "teal",
+    format: "currency",
+  },
+  {
+    label: "Male Count",
+    key: "male_count",
+    icon: "♂",
+    color: "orange",
+    format: "number",
+  },
+  {
+    label: "Female Count",
+    key: "female_count",
+    icon: "♀",
+    color: "pink",
+    format: "number",
+  },
 ];
 
 const lineCharts = [
@@ -49,7 +84,11 @@ function ChartCard({ title, type }) {
     <article className="chart-card">
       <div className="chart-card-header">
         <h3>{title}</h3>
-        <button className="chart-menu" aria-label={`Options for ${title}`}>
+        <button
+          className="chart-menu"
+          aria-label={`Options for ${title}`}
+          type="button"
+        >
           ···
         </button>
       </div>
@@ -91,7 +130,14 @@ function ChartCard({ title, type }) {
   );
 }
 
-function ChartSection({ id, eyebrow, title, description, charts, type }) {
+function ChartSection({
+  id,
+  eyebrow,
+  title,
+  description,
+  charts,
+  type,
+}) {
   return (
     <section className="dashboard-section" id={id}>
       <SectionHeader
@@ -109,7 +155,60 @@ function ChartSection({ id, eyebrow, title, description, charts, type }) {
   );
 }
 
+function formatKpi(value, format) {
+  if (value == null || !Number.isFinite(Number(value))) {
+    return "N/A";
+  }
+
+  if (format === "currency") {
+    return Number(value).toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 2,
+    });
+  }
+
+  return Number(value).toLocaleString("en-US");
+}
+
 function App() {
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function fetchSummary() {
+      try {
+        const response = await fetch(API_URL, {
+          method: "GET",
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`API request failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        setSummary(data);
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          console.error("Failed to fetch claims summary:", err);
+          setError(err.message || "Unable to load claims data.");
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    fetchSummary();
+
+    return () => controller.abort();
+  }, []);
+
   return (
     <main className="dashboard">
       <header className="dashboard-header">
@@ -136,6 +235,12 @@ function App() {
           description="A high-level snapshot of your claims portfolio."
         />
 
+        {error && (
+          <p role="alert" className="api-error">
+            Unable to load claims data: {error}
+          </p>
+        )}
+
         <div className="kpi-grid">
           {kpis.map((kpi) => (
             <article className="kpi-card" key={kpi.label}>
@@ -147,11 +252,22 @@ function App() {
               </div>
 
               <p className="kpi-label">{kpi.label}</p>
-              <p className="kpi-value">—</p>
+
+              <p className="kpi-value">
+                {loading
+                  ? "Loading..."
+                  : error
+                    ? "N/A"
+                    : formatKpi(summary?.[kpi.key], kpi.format)}
+              </p>
 
               <div className="kpi-footer">
                 <span className="status-dot muted" />
-                Waiting for data
+                {loading
+                  ? "Fetching data..."
+                  : error
+                    ? "Connection failed"
+                    : "Data loaded"}
               </div>
             </article>
           ))}
@@ -193,7 +309,13 @@ function App() {
         Claims Analytics
         <span>·</span>
         Dashboard Template
-        <span className="footer-right">No data connected</span>
+        <span className="footer-right">
+          {loading
+            ? "Connecting..."
+            : error
+              ? "No data connected"
+              : "Database connected"}
+        </span>
       </footer>
     </main>
   );
