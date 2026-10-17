@@ -1,201 +1,293 @@
 
 import { useEffect, useState } from "react";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from "recharts";
 import "./App.css";
 
-// Local Flask API for development.
-// Later, replace this with your deployed AWS Lambda Function URL.
-const API_URL = "http://localhost:5000/api/claims/summary";
+const API_URL =
+  import.meta.env.VITE_CLAIMS_API_URL ||
+  "http://localhost:5000/api/claims/summary";
 
-const kpis = [
+const money = (value) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(Number(value ?? 0));
+
+const number = (value) =>
+  new Intl.NumberFormat("en-US").format(Number(value ?? 0));
+
+const incidentHourCharts = [
   {
-    label: "Total Claims",
-    key: "total_claims",
-    icon: "#",
-    color: "blue",
-    format: "number",
+    title: "Average Claim Payout by Incident Hour",
+    subtitle: "Average claim dollars paid at each hour of the day",
+    key: "claim_by_hour",
+    money: true,
+    valueName: "Average claim payout",
+    color: "#2563eb",
   },
   {
-    label: "Total Claim Amount",
-    key: "total_claim_amount",
-    icon: "$",
-    color: "purple",
-    format: "currency",
+    title: "Average Vehicles Involved by Incident Hour",
+    subtitle: "Average number of vehicles involved at each hour",
+    key: "vehicles_by_hour",
+    money: false,
+    valueName: "Average vehicles",
+    color: "#0891b2",
   },
   {
-    label: "Average Claim Amount",
-    key: "average_claim_amount",
-    icon: "↗",
-    color: "teal",
-    format: "currency",
-  },
-  {
-    label: "Male Count",
-    key: "male_count",
-    icon: "♂",
-    color: "orange",
-    format: "number",
-  },
-  {
-    label: "Female Count",
-    key: "female_count",
-    icon: "♀",
-    color: "pink",
-    format: "number",
+    title: "Average Witnesses by Incident Hour",
+    subtitle: "Average number of witnesses at each hour",
+    key: "witnesses_by_hour",
+    money: false,
+    valueName: "Average witnesses",
+    color: "#7c3aed",
   },
 ];
 
-const lineCharts = [
-  "Average Claim Amount by Time of Day",
-  "Number of Vehicles Involved",
-  "Witnesses",
+const categoryCharts = [
+  {
+    title: "Average Claim Payout by Education",
+    subtitle: "Average dollars paid per claim for each education level",
+    key: "education",
+  },
+  {
+    title: "Average Claim Payout by Number of Vehicles",
+    subtitle: "Average dollars paid per claim by vehicle count",
+    key: "vehicles",
+  },
+  {
+    title: "Average Claim Payout by Relationship",
+    subtitle: "Average dollars paid per claim by insured relationship",
+    key: "relationship",
+  },
+  {
+    title: "Average Claim Payout by Sex",
+    subtitle: "Average dollars paid per claim by insured sex",
+    key: "sex",
+  },
+  {
+    title: "Average Claim Payout by Incident Type",
+    subtitle: "Average dollars paid per claim by incident type",
+    key: "incident_type",
+  },
+  {
+    title: "Average Claim Payout by Collision Type",
+    subtitle: "Average dollars paid per claim by collision type",
+    key: "collision_type",
+  },
 ];
 
-const pieCharts = [
-  "Average Claim by Education",
-  "Number of Vehicles Involved",
-  "Relationship",
-  "Insured Sex",
-  "Incident Type",
-  "Collision Type",
+const numericCharts = [
+  {
+    title: "Average Claim Payout by Age",
+    subtitle: "Average dollars paid per claim by insured age",
+    key: "age",
+    xAxisInterval: 4,
+  },
+  {
+    title: "Average Claim Payout by Customer Tenure",
+    subtitle: "Average dollars paid per claim by customer tenure",
+    key: "customer_tenure",
+    xAxisInterval: "preserveStartEnd",
+  },
+  {
+    title: "Average Claim Payout by Bodily Injuries",
+    subtitle: "Average dollars paid per claim by injury count",
+    key: "bodily_injuries",
+    xAxisInterval: "preserveStartEnd",
+  },
+  {
+    title: "Average Claim Payout by Policy Deductible",
+    subtitle: "Average dollars paid per claim by deductible amount",
+    key: "deductible",
+    xAxisInterval: "preserveStartEnd",
+  },
+  {
+    title: "Average Claim Payout by Annual Premium",
+    subtitle: "Average dollars paid per claim by premium range",
+    key: "annual_premium",
+    xAxisInterval: "preserveStartEnd",
+  },
 ];
 
-const barCharts = [
-  "Average Claim by Age",
-  "Months as Customer",
-  "Average Claim by Bodily Injuries",
-  "Policy Deductible",
-  "Annual Premium",
-];
+function ChartCard({
+  config,
+  data,
+  type = "bar",
+  height = 320,
+}) {
+  const chartData = Array.isArray(data) ? data : [];
+  const isMoney = config.money !== false;
+  const formatValue = isMoney ? money : number;
 
-function SectionHeader({ eyebrow, title, description }) {
-  return (
-    <div className="section-header">
-      <div>
-        <p className="eyebrow">{eyebrow}</p>
-        <h2>{title}</h2>
-      </div>
-      <p className="section-description">{description}</p>
-    </div>
-  );
-}
+  const tooltipFormatter = (value) => [
+    formatValue(value),
+    config.valueName ||
+      (isMoney ? "Average claim payout" : "Average"),
+  ];
 
-function ChartCard({ title, type }) {
   return (
     <article className="chart-card">
-      <div className="chart-card-header">
-        <h3>{title}</h3>
-        <button
-          className="chart-menu"
-          aria-label={`Options for ${title}`}
-          type="button"
-        >
-          ···
-        </button>
-      </div>
+      <h3>{config.title}</h3>
+      <p className="chart-subtitle">{config.subtitle}</p>
 
-      <div className={`chart-placeholder ${type}-placeholder`}>
-        <div className={`chart-icon ${type}-icon`}>
-          {type === "line" && (
-            <svg viewBox="0 0 48 48" aria-hidden="true">
-              <path d="M7 6V40H43" />
-              <path d="M11 31L20 21L28 26L40 10" />
-              <circle cx="11" cy="31" r="2" />
-              <circle cx="20" cy="21" r="2" />
-              <circle cx="28" cy="26" r="2" />
-              <circle cx="40" cy="10" r="2" />
-            </svg>
-          )}
-
-          {type === "pie" && (
-            <svg viewBox="0 0 48 48" aria-hidden="true">
-              <path d="M22 5A19 19 0 1 0 43 26H22Z" />
-              <path d="M28 4V20H44A19 19 0 0 0 28 4Z" />
-            </svg>
-          )}
-
-          {type === "bar" && (
-            <svg viewBox="0 0 48 48" aria-hidden="true">
-              <path d="M5 42H44" />
-              <rect x="10" y="25" width="7" height="17" rx="2" />
-              <rect x="22" y="15" width="7" height="27" rx="2" />
-              <rect x="34" y="7" width="7" height="35" rx="2" />
-            </svg>
-          )}
+      {chartData.length === 0 ? (
+        <div className="chart-empty">
+          No data available.
         </div>
+      ) : (
+        <div className="real-chart">
+          <ResponsiveContainer width="100%" height={height}>
+            {type === "line" ? (
+              <LineChart
+                data={chartData}
+                margin={{
+                  top: 10,
+                  right: 20,
+                  left: 10,
+                  bottom: 20,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
 
-        <p>Chart will appear here</p>
-        <span>Connect your data to get started</span>
-      </div>
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 12 }}
+                  interval="preserveStartEnd"
+                  minTickGap={12}
+                />
+
+                <YAxis
+                  tickFormatter={formatValue}
+                  tick={{ fontSize: 11 }}
+                  width={85}
+                />
+
+                <Tooltip formatter={tooltipFormatter} />
+                <Legend />
+
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  name={config.valueName}
+                  stroke={config.color}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+              </LineChart>
+            ) : (
+              <BarChart
+                data={chartData}
+                margin={{
+                  top: 10,
+                  right: 15,
+                  left: 10,
+                  bottom: 65,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11 }}
+                  angle={-40}
+                  textAnchor="end"
+                  interval={
+                    config.xAxisInterval ?? "preserveStartEnd"
+                  }
+                  minTickGap={12}
+                  height={85}
+                  tickMargin={8}
+                />
+
+                <YAxis
+                  tickFormatter={formatValue}
+                  tick={{ fontSize: 11 }}
+                  width={85}
+                />
+
+                <Tooltip formatter={tooltipFormatter} />
+
+                <Bar
+                  dataKey="value"
+                  name="Average claim payout"
+                  fill="#2563eb"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={55}
+                />
+              </BarChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+      )}
     </article>
   );
 }
 
-function ChartSection({
-  id,
-  eyebrow,
-  title,
-  description,
-  charts,
-  type,
-}) {
+function KpiCard({ label, value }) {
   return (
-    <section className="dashboard-section" id={id}>
-      <SectionHeader
-        eyebrow={eyebrow}
-        title={title}
-        description={description}
-      />
-
-      <div className={`chart-grid ${type}-grid`}>
-        {charts.map((chart) => (
-          <ChartCard key={chart} title={chart} type={type} />
-        ))}
-      </div>
-    </section>
+    <article className="kpi-card">
+      <p className="kpi-label">{label}</p>
+      <h2 className="kpi-value">{value}</h2>
+    </article>
   );
 }
 
-function formatKpi(value, format) {
-  if (value == null || !Number.isFinite(Number(value))) {
-    return "N/A";
-  }
-
-  if (format === "currency") {
-    return Number(value).toLocaleString("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 2,
-    });
-  }
-
-  return Number(value).toLocaleString("en-US");
-}
-
-function App() {
+export default function App() {
   const [summary, setSummary] = useState(null);
+  const [charts, setCharts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
 
-    async function fetchSummary() {
+    async function loadClaimsData() {
       try {
+        setLoading(true);
+        setError("");
+
         const response = await fetch(API_URL, {
           method: "GET",
           signal: controller.signal,
         });
 
         if (!response.ok) {
-          throw new Error(`API request failed: ${response.status}`);
+          throw new Error(
+            `API request failed: ${response.status}`
+          );
         }
 
-        const data = await response.json();
-        setSummary(data);
+        let data = await response.json();
+
+        if (typeof data.body === "string") {
+          data = JSON.parse(data.body);
+        }
+
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        setSummary(data.summary || {});
+        setCharts(data.charts || {});
       } catch (err) {
         if (err.name !== "AbortError") {
-          console.error("Failed to fetch claims summary:", err);
-          setError(err.message || "Unable to load claims data.");
+          console.error("Unable to load claims data:", err);
+          setError(
+            err.message || "Unable to load claims data."
+          );
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -204,121 +296,128 @@ function App() {
       }
     }
 
-    fetchSummary();
+    loadClaimsData();
 
     return () => controller.abort();
   }, []);
 
+  const kpis = [
+    {
+      label: "Total Claims",
+      value: number(summary?.total_claims),
+    },
+    {
+      label: "Total Claim Payout",
+      value: money(summary?.total_claim_amount),
+    },
+    {
+      label: "Average Claim Payout",
+      value: money(summary?.average_claim_amount),
+    },
+    {
+      label: "Male Insured",
+      value: number(summary?.male_count),
+    },
+    {
+      label: "Female Insured",
+      value: number(summary?.female_count),
+    },
+  ];
+
   return (
     <main className="dashboard">
       <header className="dashboard-header">
-        <div className="brand">
-          <div className="brand-icon">C</div>
-          <div>
-            <p className="brand-overline">ANALYTICS WORKSPACE</p>
-            <h1>Claims Dashboard</h1>
-          </div>
-        </div>
-
-        <div className="header-status">
-          <span className="status-dot" />
-          Dashboard Overview
-          <span className="date-label">All Time</span>
+        <div>
+          <h1>Insurance Claims Dashboard</h1>
+          <p>
+            Analyze average insurance claim payouts across
+            incidents, policyholders, and policy characteristics.
+          </p>
         </div>
       </header>
 
-      {/* KPI CARDS */}
-      <section className="dashboard-section">
-        <SectionHeader
-          eyebrow="AT A GLANCE"
-          title="Claims Overview"
-          description="A high-level snapshot of your claims portfolio."
-        />
-
-        {error && (
-          <p role="alert" className="api-error">
-            Unable to load claims data: {error}
-          </p>
-        )}
-
-        <div className="kpi-grid">
-          {kpis.map((kpi) => (
-            <article className="kpi-card" key={kpi.label}>
-              <div className="kpi-top">
-                <span className={`kpi-icon ${kpi.color}`}>
-                  {kpi.icon}
-                </span>
-                <span className="kpi-period">All time</span>
-              </div>
-
-              <p className="kpi-label">{kpi.label}</p>
-
-              <p className="kpi-value">
-                {loading
-                  ? "Loading..."
-                  : error
-                    ? "N/A"
-                    : formatKpi(summary?.[kpi.key], kpi.format)}
-              </p>
-
-              <div className="kpi-footer">
-                <span className="status-dot muted" />
-                {loading
-                  ? "Fetching data..."
-                  : error
-                    ? "Connection failed"
-                    : "Data loaded"}
-              </div>
-            </article>
-          ))}
+      {error && (
+        <div className="api-error" role="alert">
+          Unable to load claims data: {error}
         </div>
-      </section>
+      )}
 
-      {/* LINE CHARTS */}
-      <ChartSection
-        id="line-charts"
-        eyebrow="TRENDS & ACTIVITY"
-        title="Claims Trends"
-        description="Explore trends across time and incident characteristics."
-        charts={lineCharts}
-        type="line"
-      />
+      {loading && !summary ? (
+        <p className="loading-message">
+          Loading claims analytics...
+        </p>
+      ) : (
+        <>
+          <section className="kpi-grid">
+            {kpis.map((kpi) => (
+              <KpiCard
+                key={kpi.label}
+                label={kpi.label}
+                value={kpi.value}
+              />
+            ))}
+          </section>
 
-      {/* PIE CHARTS */}
-      <ChartSection
-        id="pie-charts"
-        eyebrow="DISTRIBUTION & MIX"
-        title="Claims Breakdown"
-        description="Explore the distribution of claim characteristics."
-        charts={pieCharts}
-        type="pie"
-      />
+          <section className="dashboard-section">
+            <h2>Incident Hour Analysis</h2>
+            <p className="section-description">
+              See how claim payouts and incident characteristics
+              vary by hour.
+            </p>
 
-      {/* BAR CHARTS */}
-      <ChartSection
-        id="bar-charts"
-        eyebrow="COMPARISONS"
-        title="Claims Comparisons"
-        description="Compare claim amounts and policyholder metrics."
-        charts={barCharts}
-        type="bar"
-      />
+            <div className="chart-grid line-grid">
+              {incidentHourCharts.map((config) => (
+                <ChartCard
+                  key={config.key}
+                  config={config}
+                  data={charts[config.key]}
+                  type="line"
+                  height={320}
+                />
+              ))}
+            </div>
+          </section>
 
-      <footer className="dashboard-footer">
-        <span className="footer-logo">C</span>
-        Claims Analytics
-        <span>·</span>
-        Dashboard Template
-        <span className="footer-right">
-          {loading
-            ? "Connecting..."
-            : error
-              ? "No data connected"
-              : "Database connected"}
-        </span>
-      </footer>
+          <section className="dashboard-section">
+            <h2>Average Claim Payout by Category</h2>
+            <p className="section-description">
+              Each bar represents the average dollar amount paid
+              per claim within that category, not the number of
+              claims in the category.
+            </p>
+
+            <div className="chart-grid pie-grid">
+              {categoryCharts.map((config) => (
+                <ChartCard
+                  key={config.key}
+                  config={config}
+                  data={charts[config.key]}
+                  height={350}
+                />
+              ))}
+            </div>
+          </section>
+
+          <section className="dashboard-section">
+            <h2>Average Claim Payout by Numeric Factors</h2>
+            <p className="section-description">
+              Compare average payouts across age, customer tenure,
+              injuries, deductibles, and annual premium ranges.
+            </p>
+
+            <div className="chart-grid bar-grid">
+              {numericCharts.map((config) => (
+                <ChartCard
+                  key={config.key}
+                  config={config}
+                  data={charts[config.key]}
+                  height={380}
+                />
+              ))}
+            </div>
+          </section>
+        </>
+      )}
     </main>
   );
 }
-
-export default App;

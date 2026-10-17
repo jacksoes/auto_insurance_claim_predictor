@@ -439,3 +439,32 @@ button {
     margin-left: 30px;
   }
 }
+
+
+
+/* Real Recharts visualizations */
+.real-chart {
+  width: 100%;
+  min-width: 0;
+  padding: 12px 8px 16px;
+}
+
+.real-chart .recharts-responsive-container {
+  min-width: 0;
+}
+
+.chart-card {
+  min-width: 0;
+}
+
+.chart-card h3 {
+  overflow-wrap: anywhere;
+}
+
+.api-error {
+  padding: 12px 16px;
+  margin: 16px 0;
+  border-radius: 8px;
+  color: #b91c1c;
+  background: #fef2f2;
+}
